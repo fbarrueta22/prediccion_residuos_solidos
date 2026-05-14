@@ -95,7 +95,22 @@ st.title(
 )
 
 st.write(
-    "Sistema Inteligente con XGBoost"
+    "Sistema Inteligente utilizando XGBoost y Datos Abiertos del Perú"
+)
+
+# ==========================================
+# MENÚ
+# ==========================================
+
+menu = st.sidebar.selectbox(
+    "Seleccionar Vista",
+    [
+        "Predicción",
+        "Exploración Dataset",
+        "Gráficos",
+        "Top Departamentos",
+        "Correlación"
+    ]
 )
 
 # ==========================================
@@ -105,38 +120,190 @@ st.write(
 model, model_info = load_models()
 
 # ==========================================
-# INPUTS
+# VISTA PREDICCIÓN
 # ==========================================
 
-if model is not None:
+if menu == "Predicción":
 
-    st.header(
-        "Ingrese los datos del distrito"
+    if model is not None:
+
+        st.header(
+            "Ingrese los datos del distrito"
+        )
+
+        inputs = {}
+
+        for feature in model_info["columnas"]:
+
+            valor = st.number_input(
+                feature,
+                value=0.0,
+                step=1.0
+            )
+
+            inputs[feature] = valor
+
+        # ==========================================
+        # PREDICCIÓN
+        # ==========================================
+
+        if st.button("Predecir"):
+
+            entrada = pd.DataFrame([inputs])
+
+            prediction = model.predict(entrada)[0]
+
+            st.success(
+                f"Residuos Municipales Estimados: "
+                f"{prediction:,.2f}"
+            )
+
+# ==========================================
+# EXPLORACIÓN DATASET
+# ==========================================
+
+elif menu == "Exploración Dataset":
+
+    st.header("Exploración del Dataset")
+
+    st.subheader("Primeras filas")
+
+    st.dataframe(df.head(20))
+
+    st.subheader("Información General")
+
+    st.write(df.describe())
+
+    st.subheader("Valores Nulos")
+
+    st.write(df.isnull().sum())
+
+    st.subheader("Filtrar por Departamento")
+
+    departamentos = sorted(
+        df['DEPARTAMENTO'].unique()
     )
 
-    inputs = {}
+    dep = st.selectbox(
+        "Seleccione departamento",
+        departamentos
+    )
 
-    for feature in model_info["columnas"]:
+    filtro = df[
+        df['DEPARTAMENTO'] == dep
+    ]
 
-        valor = st.number_input(
-            feature,
-            value=0.0,
-            step=1.0
-        )
+    st.dataframe(filtro.head(50))
 
-        inputs[feature] = valor
+# ==========================================
+# GRÁFICOS
+# ==========================================
 
-    # ==========================================
-    # PREDICCIÓN
-    # ==========================================
+elif menu == "Gráficos":
 
-    if st.button("Predecir"):
+    st.header("Visualización de Datos")
 
-        entrada = pd.DataFrame([inputs])
+    # --------------------------------------
+    # Población vs Residuos
+    # --------------------------------------
 
-        prediction = model.predict(entrada)[0]
+    st.subheader(
+        "Población Total vs Residuos"
+    )
 
-        st.success(
-            f"Residuos Municipales Estimados: "
-            f"{prediction:,.2f}"
-        )
+    fig, ax = plt.subplots(figsize=(8,6))
+
+    ax.scatter(
+        df['POB_TOTAL'],
+        df['QRESIDUOS_MUN']
+    )
+
+    ax.set_xlabel("Población Total")
+    ax.set_ylabel("Residuos")
+
+    st.pyplot(fig)
+
+    # --------------------------------------
+    # Residuos por Año
+    # --------------------------------------
+
+    st.subheader(
+        "Residuos por Año"
+    )
+
+    residuos_anio = (
+        df.groupby('PERIODO')
+        ['QRESIDUOS_MUN']
+        .sum()
+    )
+
+    fig2, ax2 = plt.subplots(figsize=(8,6))
+
+    ax2.plot(
+        residuos_anio.index,
+        residuos_anio.values,
+        marker='o'
+    )
+
+    ax2.set_xlabel("Año")
+    ax2.set_ylabel("Residuos")
+
+    st.pyplot(fig2)
+
+# ==========================================
+# TOP DEPARTAMENTOS
+# ==========================================
+
+elif menu == "Top Departamentos":
+
+    st.header(
+        "Departamentos con Más Residuos"
+    )
+
+    top_departamentos = (
+        df.groupby('DEPARTAMENTO')
+        ['QRESIDUOS_MUN']
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
+
+    st.bar_chart(top_departamentos)
+
+    st.dataframe(top_departamentos)
+
+# ==========================================
+# CORRELACIÓN
+# ==========================================
+
+elif menu == "Correlación":
+
+    st.header("Correlación entre Variables")
+
+    correlacion = df[[
+        'POB_TOTAL',
+        'POB_URBANA',
+        'POB_RURAL',
+        'QRESIDUOS_MUN'
+    ]].corr()
+
+    st.dataframe(correlacion)
+
+    fig, ax = plt.subplots(figsize=(8,6))
+
+    cax = ax.matshow(correlacion)
+
+    plt.xticks(
+        range(len(correlacion.columns)),
+        correlacion.columns,
+        rotation=45
+    )
+
+    plt.yticks(
+        range(len(correlacion.columns)),
+        correlacion.columns
+    )
+
+    fig.colorbar(cax)
+
+    st.pyplot(fig)
