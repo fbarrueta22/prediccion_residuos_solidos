@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+scikit-learn
+xgboost
+joblib
+psycopg2-binary
+toml
