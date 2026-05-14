@@ -70,7 +70,7 @@ def cargar_datos():
 
     query = """
     SELECT *
-    FROM pc_ml_residuos
+    FROM prediccion_residuos_solidos
     """
 
     df = pd.read_sql(query, connection)
