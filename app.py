@@ -116,7 +116,7 @@ if model is not None:
 
     inputs = {}
 
-    for feature in model_info["feature_names"]:
+    for feature in model_info["columnas"]:
 
         valor = st.number_input(
             feature,
