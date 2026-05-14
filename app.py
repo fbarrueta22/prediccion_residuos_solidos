@@ -2,6 +2,7 @@ import streamlit as st
 import joblib
 import pickle
 import pandas as pd
+import matplotlib.pyplot as plt
 import psycopg2
 
 # ==========================================
@@ -15,19 +16,21 @@ PORT = st.secrets["postgres"]["PORT"]
 DBNAME = st.secrets["postgres"]["DBNAME"]
 
 # ==========================================
-# CONFIG
+# CONFIGURACIÓN
 # ==========================================
 
 st.set_page_config(
     page_title="Predicción de Residuos",
-    page_icon="🗑️"
+    page_icon="🗑️",
+    layout="wide"
 )
 
 # ==========================================
-# CONEXIÓN BD
+# CONEXIÓN SUPABASE
 # ==========================================
 
-try:
+@st.cache_resource
+def conectar_bd():
 
     connection = psycopg2.connect(
         user=USER,
@@ -36,6 +39,53 @@ try:
         port=PORT,
         dbname=DBNAME
     )
+
+    return connection
+
+# ==========================================
+# CARGAR MODELO
+# ==========================================
+
+@st.cache_resource
+def load_models():
+
+    model = joblib.load("residuos_model.pkl")
+
+    with open("residuos_model_info.pkl",
+        "rb"
+    ) as f:
+
+        model_info = pickle.load(f)
+
+    return model, model_info
+
+# ==========================================
+# LEER DATASET DESDE SUPABASE
+# ==========================================
+
+@st.cache_data
+def cargar_datos():
+
+    connection = conectar_bd()
+
+    query = """
+    SELECT *
+    FROM pc_ml_residuos
+    """
+
+    df = pd.read_sql(query, connection)
+
+    connection.close()
+
+    return df
+
+# ==========================================
+# CONEXIÓN
+# ==========================================
+
+try:
+
+    connection = conectar_bd()
 
     cursor = connection.cursor()
 
@@ -47,44 +97,22 @@ try:
     connection.close()
 
     st.sidebar.success(
-        f"Conectado a Supabase: {result}"
+        "Conectado a Supabase"
     )
 
 except Exception as e:
 
     st.sidebar.error(
-        f"Error de conexión: {e}"
+        f"Error conexión: {e}"
     )
 
 # ==========================================
-# CARGAR MODELO
+# CARGAR MODELO Y DATASET
 # ==========================================
 
-@st.cache_resource
-def load_models():
+model, model_info = load_models()
 
-    try:
-
-        model = joblib.load(
-            "residuos_model.pkl"
-        )
-
-        with open(
-            "residuos_model_info.pkl",
-            "rb"
-        ) as f:
-
-            model_info = pickle.load(f)
-
-        return model, model_info
-
-    except FileNotFoundError:
-
-        st.error(
-            "No se encontraron los archivos del modelo"
-        )
-
-        return None, None
+df = cargar_datos()
 
 # ==========================================
 # TÍTULO
@@ -95,7 +123,7 @@ st.title(
 )
 
 st.write(
-    "Sistema Inteligente utilizando XGBoost y Datos Abiertos del Perú"
+    "Sistema Inteligente utilizando XGBoost y Supabase"
 )
 
 # ==========================================
@@ -114,49 +142,37 @@ menu = st.sidebar.selectbox(
 )
 
 # ==========================================
-# CARGAR MODELO
-# ==========================================
-
-model, model_info = load_models()
-
-# ==========================================
-# VISTA PREDICCIÓN
+# PREDICCIÓN
 # ==========================================
 
 if menu == "Predicción":
 
-    if model is not None:
+    st.header(
+        "Ingrese los datos"
+    )
 
-        st.header(
-            "Ingrese los datos del distrito"
+    inputs = {}
+
+    for feature in model_info["columnas"]:
+
+        valor = st.number_input(
+            feature,
+            value=0.0,
+            step=1.0
         )
 
-        inputs = {}
+        inputs[feature] = valor
 
-        for feature in model_info["columnas"]:
+    if st.button("Predecir"):
 
-            valor = st.number_input(
-                feature,
-                value=0.0,
-                step=1.0
-            )
+        entrada = pd.DataFrame([inputs])
 
-            inputs[feature] = valor
+        prediction = model.predict(entrada)[0]
 
-        # ==========================================
-        # PREDICCIÓN
-        # ==========================================
-
-        if st.button("Predecir"):
-
-            entrada = pd.DataFrame([inputs])
-
-            prediction = model.predict(entrada)[0]
-
-            st.success(
-                f"Residuos Municipales Estimados: "
-                f"{prediction:,.2f}"
-            )
+        st.success(
+            f"Residuos Estimados: "
+            f"{prediction:,.2f}"
+        )
 
 # ==========================================
 # EXPLORACIÓN DATASET
@@ -164,13 +180,15 @@ if menu == "Predicción":
 
 elif menu == "Exploración Dataset":
 
-    st.header("Exploración del Dataset")
+    st.header(
+        "Exploración del Dataset"
+    )
 
-    st.subheader("Primeras filas")
+    st.subheader("Primeros registros")
 
     st.dataframe(df.head(20))
 
-    st.subheader("Información General")
+    st.subheader("Estadísticas")
 
     st.write(df.describe())
 
@@ -178,22 +196,28 @@ elif menu == "Exploración Dataset":
 
     st.write(df.isnull().sum())
 
-    st.subheader("Filtrar por Departamento")
+    # --------------------------------------
+    # FILTRO
+    # --------------------------------------
 
-    departamentos = sorted(
-        df['DEPARTAMENTO'].unique()
-    )
+    if "departamento" in df.columns:
 
-    dep = st.selectbox(
-        "Seleccione departamento",
-        departamentos
-    )
+        departamentos = sorted(
+            df["departamento"]
+            .dropna()
+            .unique()
+        )
 
-    filtro = df[
-        df['DEPARTAMENTO'] == dep
-    ]
+        dep = st.selectbox(
+            "Filtrar por departamento",
+            departamentos
+        )
 
-    st.dataframe(filtro.head(50))
+        filtro = df[
+            df["departamento"] == dep
+        ]
+
+        st.dataframe(filtro)
 
 # ==========================================
 # GRÁFICOS
@@ -201,54 +225,73 @@ elif menu == "Exploración Dataset":
 
 elif menu == "Gráficos":
 
-    st.header("Visualización de Datos")
+    st.header(
+        "Visualización de Datos"
+    )
 
     # --------------------------------------
-    # Población vs Residuos
+    # DISPERSIÓN
     # --------------------------------------
 
-    st.subheader(
-        "Población Total vs Residuos"
-    )
+    if (
+        "POB_TOTAL" in df.columns and
+        "prediction" in df.columns
+    ):
 
-    fig, ax = plt.subplots(figsize=(8,6))
+        st.subheader(
+            "Población Total vs Predicción"
+        )
 
-    ax.scatter(
-        df['POB_TOTAL'],
-        df['QRESIDUOS_MUN']
-    )
+        fig, ax = plt.subplots(figsize=(8,6))
 
-    ax.set_xlabel("Población Total")
-    ax.set_ylabel("Residuos")
+        ax.scatter(
+            df["POB_TOTAL"],
+            df["prediction"]
+        )
 
-    st.pyplot(fig)
+        ax.set_xlabel(
+            "Población Total"
+        )
+
+        ax.set_ylabel(
+            "Predicción"
+        )
+
+        st.pyplot(fig)
 
     # --------------------------------------
-    # Residuos por Año
+    # RESIDUOS POR PERIODO
     # --------------------------------------
 
-    st.subheader(
-        "Residuos por Año"
-    )
+    if (
+        "PERIODO" in df.columns and
+        "prediction" in df.columns
+    ):
 
-    residuos_anio = (
-        df.groupby('PERIODO')
-        ['QRESIDUOS_MUN']
-        .sum()
-    )
+        st.subheader(
+            "Predicciones por Año"
+        )
 
-    fig2, ax2 = plt.subplots(figsize=(8,6))
+        residuos_anio = (
+            df.groupby("PERIODO")
+            ["prediction"]
+            .mean()
+        )
 
-    ax2.plot(
-        residuos_anio.index,
-        residuos_anio.values,
-        marker='o'
-    )
+        fig2, ax2 = plt.subplots(
+            figsize=(8,6)
+        )
 
-    ax2.set_xlabel("Año")
-    ax2.set_ylabel("Residuos")
+        ax2.plot(
+            residuos_anio.index,
+            residuos_anio.values,
+            marker='o'
+        )
 
-    st.pyplot(fig2)
+        ax2.set_xlabel("Año")
+        ax2.set_ylabel("Predicción")
+
+        st.pyplot(fig2)
 
 # ==========================================
 # TOP DEPARTAMENTOS
@@ -257,20 +300,31 @@ elif menu == "Gráficos":
 elif menu == "Top Departamentos":
 
     st.header(
-        "Departamentos con Más Residuos"
+        "Top Departamentos"
     )
 
-    top_departamentos = (
-        df.groupby('DEPARTAMENTO')
-        ['QRESIDUOS_MUN']
-        .sum()
-        .sort_values(ascending=False)
-        .head(10)
-    )
+    if (
+        "departamento" in df.columns and
+        "prediction" in df.columns
+    ):
 
-    st.bar_chart(top_departamentos)
+        top_departamentos = (
+            df.groupby("departamento")
+            ["prediction"]
+            .sum()
+            .sort_values(
+                ascending=False
+            )
+            .head(10)
+        )
 
-    st.dataframe(top_departamentos)
+        st.bar_chart(
+            top_departamentos
+        )
+
+        st.dataframe(
+            top_departamentos
+        )
 
 # ==========================================
 # CORRELACIÓN
@@ -278,20 +332,38 @@ elif menu == "Top Departamentos":
 
 elif menu == "Correlación":
 
-    st.header("Correlación entre Variables")
+    st.header(
+        "Correlación"
+    )
 
-    correlacion = df[[
+    columnas = [
         'POB_TOTAL',
         'POB_URBANA',
         'POB_RURAL',
-        'QRESIDUOS_MUN'
-    ]].corr()
+        'prediction'
+    ]
 
-    st.dataframe(correlacion)
+    columnas_existentes = [
+        c for c in columnas
+        if c in df.columns
+    ]
 
-    fig, ax = plt.subplots(figsize=(8,6))
+    correlacion = (
+        df[columnas_existentes]
+        .corr()
+    )
 
-    cax = ax.matshow(correlacion)
+    st.dataframe(
+        correlacion
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(8,6)
+    )
+
+    cax = ax.matshow(
+        correlacion
+    )
 
     plt.xticks(
         range(len(correlacion.columns)),
