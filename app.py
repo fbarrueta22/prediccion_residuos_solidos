@@ -68,10 +68,11 @@ def cargar_datos():
 
     connection = conectar_bd()
 
-    query = """
-    SELECT *
-    FROM prediccion_residuos_solidos
-    """
+    if conn.closed:
+        st.cache_resource.clear()
+        conn = get_connection()
+
+    query = "SELECT * FROM prediccion_residuos_solidos"
 
     df = pd.read_sql(query, connection)
 
