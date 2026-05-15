@@ -72,7 +72,7 @@ def cargar_datos():
         st.cache_resource.clear()
         connection = conectar_bd()
 
-    query = "SELECT * FROM prediccion_residuos_solidos"
+    query = "SELECT * FROM residuos_solidos"
 
     df = pd.read_sql(query, connection)
     return df
