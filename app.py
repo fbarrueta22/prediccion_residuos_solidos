@@ -68,7 +68,7 @@ def cargar_datos():
 
     connection = conectar_bd()
 
-    if conn.closed:
+    if connection.closed:
         st.cache_resource.clear()
         conn = get_connection()
 
