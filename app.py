@@ -91,8 +91,8 @@ try:
 
     result = cursor.fetchone()
 
-    cursor.close()
-    connection.close()
+    #cursor.close()
+    #connection.close()
 
     st.sidebar.success(
         "Conectado a Supabase"
