@@ -70,7 +70,7 @@ def cargar_datos():
 
     if connection.closed:
         st.cache_resource.clear()
-        conn = get_connection()
+        connection = conectar_bd()
 
     query = "SELECT * FROM prediccion_residuos_solidos"
 
