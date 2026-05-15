@@ -75,9 +75,6 @@ def cargar_datos():
     query = "SELECT * FROM prediccion_residuos_solidos"
 
     df = pd.read_sql(query, connection)
-
-    connection.close()
-
     return df
 
 # ==========================================
